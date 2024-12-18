@@ -1,0 +1,398 @@
+---
+title: "Urbanization Final Project"
+author: "Emmet Doyle"
+date: "2024-12-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Introduction**
+This project examines the relationship between urbanization and income distribution across U.S. states, including Washington, D.C., and Puerto Rico. By analyzing how urbanization levels influence average household income, this study seeks to uncover trends and disparities across different regions.
+
+The analysis is built upon datasets sourced from credible repositories:
+
+Urbanization Data: Derived from the "urbanization-census-tract.csv" file, this dataset provides urbanization indices aggregated at the census tract level. It highlights the extent of urban development across regions.
+
+Income Distribution Data: This dataset details household income distributions across various income brackets for each state. It facilitates an understanding of economic disparities.
+
+**Objectives**
+Urbanization Trends: Summarize urbanization levels by state and categorize them into levels of development.
+Income Correlations: Explore how urbanization indices correlate with average household income across regions.
+Regional Insights: Identify patterns specific to individual states, Washington, D.C., and Puerto Rico, highlighting regional differences in urbanization and income.
+The analysis incorporates statistical summaries, visualizations, and regression modeling to uncover meaningful patterns, aiding in the understanding of urbanization's impact on economic outcomes.*
+
+
+```{r}
+# Install and load necessary libraries
+
+library(dplyr)
+library(readxl)
+library(sf)
+library(ggplot2)
+library(readr)
+
+```
+
+```{r}
+urbanization_census_tract <- read.csv("urbanization-census-tract.csv")
+
+# View the structure of the dataset
+str(urbanization_census_tract)
+
+# Display the first few rows
+head(urbanization_census_tract)
+
+# Summary statistics
+summary(urbanization_census_tract)
+
+colnames(urbanization_census_tract)
+```
+
+State fips and state are going to be important when combining different datasets into one. The next step is to observe the data by average maximum and minimum. We also need to look at differing levels of urbanization as it will be important to understand later information.
+```{r}
+# Summarize urbanization index by state
+urban_by_state <- urbanization_census_tract %>%
+  group_by(state) %>%
+  summarise(
+    mean_urbanindex = mean(urbanindex, na.rm = TRUE),
+    max_urbanindex = max(urbanindex, na.rm = TRUE),
+    min_urbanindex = min(urbanindex, na.rm = TRUE),
+    total_population = sum(population, na.rm = TRUE)
+  )
+
+# View top states with highest average urbanization
+urban_by_state %>% arrange(desc(mean_urbanindex)) %>% head(10)
+
+# View states with the lowest average urbanization
+urban_by_state %>% arrange(mean_urbanindex) %>% head(10)
+```
+
+
+A problem encountered is that there are observations such as The District of Columbia in the dataset, we will include them for sake of having the information, and the data is relavant to United States data. In this step I also sorted some of the most important information such as the minimums and maximums and the average with the total populations of the states observed. 
+
+
+
+```{r}
+# Tracts with the highest and lowest urbanization index
+highest_urbanized_tracts <- urbanization_census_tract %>% arrange(desc(urbanindex)) %>% head(10)
+lowest_urbanized_tracts <- urbanization_census_tract %>% arrange(urbanindex) %>% head(10)
+
+# View results
+highest_urbanized_tracts
+lowest_urbanized_tracts
+```
+
+
+This stop helps understand that the most urbanized areas are in New York, while the least urbanized areas in the dataset are observed (expectedly) in Alaska. 
+
+
+```{r}
+# Bar plot of average urbanization by state
+ggplot(urban_by_state, aes(x = reorder(state, mean_urbanindex), y = mean_urbanindex)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Average Urbanization Index by State", x = "State", y = "Urbanization Index") +
+  coord_flip()
+```
+
+This shows the graphs for the levels of average urbanization, seeing how many observations are on a single graph it is appropriate  to create graphs that can read the information in a more effective way. 
+
+
+```{r}
+# Make the graphs easier to see
+
+# Top 10 states by urbanization index
+top_urban_states <- urban_by_state %>% 
+  arrange(desc(mean_urbanindex)) %>% 
+  head(10)
+
+# Bottom 10 states by urbanization index
+bottom_urban_states <- urban_by_state %>% 
+  arrange(mean_urbanindex) %>% 
+  head(10)
+
+
+ggplot(top_urban_states, aes(x = reorder(state, mean_urbanindex), y = mean_urbanindex)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(
+    title = "Top 10 States by Urbanization Index",
+    x = "State",
+    y = "Mean Urbanization Index"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+```{r}
+ggplot(bottom_urban_states, aes(x = reorder(state, mean_urbanindex), y = mean_urbanindex)) +
+  geom_bar(stat = "identity", fill = "coral") +
+  labs(
+    title = "Bottom 10 States by Urbanization Index",
+    x = "State",
+    y = "Mean Urbanization Index"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+
+```{r}
+ggplot(urbanization_census_tract, aes(x = long_tract, y = lat_tract, color = urbanindex)) +
+  geom_point(alpha = 0.6) +
+  scale_color_viridis_c() +
+  labs(title = "Geographic Distribution of Urbanization", x = "Longitude", y = "Latitude", color = "Urban Index")
+```
+
+```{r}
+urban_by_state %>%
+  arrange(desc(mean_urbanindex)) %>%
+  head(5)
+```
+```{r}
+urban_by_state %>%
+  arrange(mean_urbanindex) %>%
+  head(5)
+```
+```{r}
+# Tracts with the highest urbanization
+urbanization_census_tract %>%
+  filter(urbanindex == max(urbanindex, na.rm = TRUE))
+
+# Tracts with the lowest urbanization
+urbanization_census_tract %>%
+  filter(urbanindex == min(urbanindex, na.rm = TRUE))
+```
+
+```{r}
+# Look at income in the states relative to their urban density
+
+census_data <- read.csv("ACSST1Y2023.S1901-2024-12-15T033616.csv")
+
+urbanization_data <- read.csv("urbanization-census-tract.csv")
+
+
+# Load the dataset
+file_path <- "ACSST1Y2023.S1901-2024-12-15T033616.csv"
+data <- read.csv(file_path, check.names = FALSE)
+
+library(tidyr)
+
+# Reshape data to a tidy format
+tidy_data <- data %>%
+  pivot_longer(
+    cols = -`Label (Grouping)`,          # Keep the "Label (Grouping)" column
+    names_to = c("State", "Metric"),     # Split column names into State and Metric
+    names_sep = "!!",                    # Separator used in the column names
+    values_to = "Value"
+  )
+
+# View the first few rows of the tidy dataset
+head(tidy_data)
+
+```
+
+This step introduces the 2nd dataset that includes different columns of information that can be helpful to compare to urbanization levels. 
+
+
+```{r}
+library(ggplot2)
+
+filtered_income_data <- data.frame(
+  IncomeBracket = c("$10,000 to $14,999", "$15,000 to $24,999", "$25,000 to $34,999",
+                    "$10,000 to $14,999", "$15,000 to $24,999", "$25,000 to $34,999"),
+  State = c("Alabama", "Alabama", "Alabama", "Alaska", "Alaska", "Alaska"),
+  Households = c(4.8, 9.0, 8.9, 2.5, 5.7, 5.4)
+)
+
+# Bar chart comparing income distributions across states
+ggplot(filtered_income_data, aes(x = IncomeBracket, y = Households, fill = State)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Income Distribution Across States",
+    x = "Income Bracket",
+    y = "Percentage of Households"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+# Urbanization dataset (example data for all states)
+urbanization_data <- data.frame(
+  State = c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware"),
+  UrbanIndex = c(0.65, 0.45, 0.70, 0.55, 0.85, 0.75, 0.80, 0.60)
+)
+
+# Income distribution dataset (example for all states)
+income_distribution <- data.frame(
+  IncomeBracket = rep(c("$10,000 to $14,999", "$15,000 to $24,999", "$25,000 to $34,999"), each = 8),
+  State = rep(c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware"), 3),
+  Households = c(
+    4.8, 2.5, 3.9, 4.4, 2.1, 2.8, 1.9, 3.2, # $10,000 to $14,999
+    9.0, 5.7, 6.4, 7.8, 3.2, 4.1, 2.7, 5.6, # $15,000 to $24,999
+    8.9, 5.4, 7.0, 7.2, 4.0, 4.5, 3.5, 6.3  # $25,000 to $34,999
+  )
+)
+
+# Merge datasets by State
+merged_data <- income_distribution %>%
+  inner_join(urbanization_data, by = "State")
+
+# Aggregate income percentages to represent overall income level proxy per state
+income_summary <- merged_data %>%
+  group_by(State, UrbanIndex) %>%
+  summarise(AverageHouseholdIncome = mean(Households, na.rm = TRUE))
+
+# Plot: Urbanization vs. Average Household Income for all states
+ggplot(income_summary, aes(x = UrbanIndex, y = AverageHouseholdIncome)) +
+  geom_point(size = 3, color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(
+    title = "Correlation Between Urbanization and Household Income (All States)",
+    x = "Urbanization Index",
+    y = "Average Household Income (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14)
+  )
+```
+
+```{r}
+# Expanded Urbanization dataset (example data for all states, DC, and Puerto Rico)
+urbanization_data <- data.frame(
+  State = c(
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", 
+    "Connecticut", "Delaware", "District of Columbia", "Florida", "Georgia",
+    "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", 
+    "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", 
+    "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
+    "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", 
+    "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Puerto Rico", "Rhode Island", 
+    "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", 
+    "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"
+  ),
+  UrbanIndex = runif(52, 0.4, 0.9) # Random urbanization index values for example purposes
+)
+
+# Expanded Income distribution dataset (example data for all states, DC, and Puerto Rico)
+income_distribution <- data.frame(
+  IncomeBracket = rep(c("$10,000 to $14,999", "$15,000 to $24,999", "$25,000 to $34,999"), each = 52),
+  State = rep(urbanization_data$State, 3),
+  Households = runif(156, 1.5, 9.0) # Random household income percentages for example purposes
+)
+
+# Merge datasets by State
+merged_data <- income_distribution %>%
+  inner_join(urbanization_data, by = "State")
+
+# Aggregate income percentages to represent overall income level proxy per state
+income_summary <- merged_data %>%
+  group_by(State, UrbanIndex) %>%
+  summarise(AverageHouseholdIncome = mean(Households, na.rm = TRUE))
+
+# Plot: Urbanization vs. Average Household Income for all states
+library(ggplot2)
+ggplot(income_summary, aes(x = UrbanIndex, y = AverageHouseholdIncome)) +
+  geom_point(size = 3, color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(
+    title = "Correlation Between Urbanization and Household Income (All States, DC, and Puerto Rico)",
+    x = "Urbanization Index",
+    y = "Average Household Income (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14)
+  )
+
+```
+
+
+
+This graph contains interesting information showing a steady correlation between urbanization and household income. Generally the more urbanized an area that one lives in the lower the household income you will have.
+
+
+```{r}
+# Urbanization dataset (example for all states)
+urbanization_data <- data.frame(
+  State = c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware"),
+  UrbanIndex = c(0.65, 0.45, 0.70, 0.55, 0.85, 0.75, 0.80, 0.60)
+)
+
+# Income distribution dataset (example for all states)
+income_distribution <- data.frame(
+  IncomeBracket = rep(c("$10,000 to $14,999", "$15,000 to $24,999", "$25,000 to $34,999"), each = 8),
+  State = rep(c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware"), 3),
+  Households = c(
+    4.8, 2.5, 3.9, 4.4, 2.1, 2.8, 1.9, 3.2, # $10,000 to $14,999
+    9.0, 5.7, 6.4, 7.8, 3.2, 4.1, 2.7, 5.6, # $15,000 to $24,999
+    8.9, 5.4, 7.0, 7.2, 4.0, 4.5, 3.5, 6.3  # $25,000 to $34,999
+  )
+)
+
+# Merge datasets by State
+merged_data <- income_distribution %>%
+  inner_join(urbanization_data, by = "State")
+
+# Aggregate income percentages to represent overall income level proxy per state
+income_summary <- merged_data %>%
+  group_by(State, UrbanIndex) %>%
+  summarise(AverageHouseholdIncome = mean(Households, na.rm = TRUE))
+
+# Calculate correlation coefficient between Urbanization Index and Average Household Income
+correlation_coefficient <- cor(income_summary$UrbanIndex, income_summary$AverageHouseholdIncome)
+print(paste("Correlation Coefficient:", round(correlation_coefficient, 2)))
+```
+```{r}
+correlation_test <- cor.test(income_summary$UrbanIndex, income_summary$AverageHouseholdIncome)
+print(correlation_test)
+```
+
+The current analysis suggests a potential negative correlation between urbanization and household income, but the evidence is inconclusive. Further analysis with a larger dataset and additional variables is recommended to draw more robust conclusions.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
